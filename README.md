@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# To-Do by Ake
 
-## Getting Started
+Offline-first Next.js PWA port of the Swift app.
 
-First, run the development server:
+## Local setup
 
 ```bash
+cp .env.example .env.local
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app remains usable with only IndexedDB when Supabase is not configured. For cloud sync and push notifications, fill in `.env.local` and apply `../supabase/schema.sql` in the Supabase SQL editor.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Generate VAPID keys once, outside source control:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npx web-push generate-vapid-keys
+```
 
-## Learn More
+Put the public key in `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, the private key in `VAPID_PRIVATE_KEY`, and use a `mailto:` value for `VAPID_SUBJECT`. Never expose the private key to the browser.
 
-To learn more about Next.js, take a look at the following resources:
+## Auth and push
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The API routes use the Supabase Auth session cookie. Configure an auth provider in Supabase, sign users in through the Supabase browser client, then open Settings and choose **Enable Push Notifications**. The browser asks for permission, stores the subscription under the authenticated user, and the service worker displays incoming VAPID notifications.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Routes:
 
-## Deploy on Vercel
+- `POST /api/sync` applies queued task changes and returns the current task set.
+- `POST /api/push/subscribe` stores a subscription.
+- `DELETE /api/push/subscribe` removes a subscription.
+- `POST /api/push/send` sends a test/user reminder notification.
+- `GET|POST /api/cron/reminders` runs the server-side due reminder scheduler for installed push subscribers when the app is closed.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The server reminder cron expects the Supabase migration in `../supabase/schema.sql` to include the `public.reminder_jobs` table, and it should be scheduled every 5 minutes to process due reminders reliably.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Supabase RLS policies restrict profiles, tasks, settings, tombstones, and push subscriptions to the current authenticated user. Task conflicts use the newest `updated_at`; deletes use tombstones so an offline delete cannot be resurrected by an older write.
