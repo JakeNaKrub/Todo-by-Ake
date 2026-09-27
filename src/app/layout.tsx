@@ -18,7 +18,10 @@ export const metadata: Metadata = {
   description: appConfig.description,
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/icon-192.jpg",
+    icon: [
+      { url: "/favicon.ico", rel: "icon" },
+      { url: "/icon-192.jpg", rel: "icon", type: "image/jpeg" },
+    ],
     apple: "/apple-touch-icon.jpg",
   },
 };

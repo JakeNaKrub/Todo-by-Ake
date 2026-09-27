@@ -1,37 +1,69 @@
 # To-Do by Ake
 
-Offline-first Next.js PWA port of the Swift app.
+Offline-first task manager for quick planning, deadline tracking, and local-first sync.
+
+## What this app does
+
+- Create, edit, complete, and delete tasks
+- Organize tasks by category and urgency
+- Track deadlines and reminder timing
+- Work offline with IndexedDB storage
+- Optionally sync with Supabase when signed in
+- Enable browser push notifications for supported browsers
+
+## Current status
+
+This version is intentionally local-first. The app works without a backend, and Supabase is used for optional sign-in, sync, and push subscription storage.
 
 ## Local setup
 
 ```bash
-cp .env.example .env.local
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
-The app remains usable with only IndexedDB when Supabase is not configured. For cloud sync and push notifications, fill in `.env.local` and apply `../supabase/schema.sql` in the Supabase SQL editor.
+If you want full Supabase sync and push support, fill in the env values and run the SQL migration in `../supabase/schema.sql`.
 
-Generate VAPID keys once, outside source control:
+## Required environment variables
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=https://yourdomain.com
+```
+
+Important:
+- `NEXT_PUBLIC_*` values are safe to expose to the browser
+- `SUPABASE_SERVICE_ROLE_KEY` and `VAPID_PRIVATE_KEY` must stay server-side only
+
+Generate VAPID keys when needed:
 
 ```bash
 npx web-push generate-vapid-keys
 ```
 
-Put the public key in `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, the private key in `VAPID_PRIVATE_KEY`, and use a `mailto:` value for `VAPID_SUBJECT`. Never expose the private key to the browser.
+## App behavior
 
-## Auth and push
+- Local-only mode: usable with IndexedDB alone
+- Authenticated sync: uses Supabase for task and settings sync
+- Push notifications: request permission and subscribe through the browser
+- Reminder timing: browser-local scheduling for unfinished tasks and upcoming deadlines
 
-The API routes use the Supabase Auth session cookie. Configure an auth provider in Supabase, sign users in through the Supabase browser client, then open Settings and choose **Enable Push Notifications**. The browser asks for permission, stores the subscription under the authenticated user, and the service worker displays incoming VAPID notifications.
+## Routes
 
-Routes:
+- `POST /api/sync` applies queued task changes and returns the current task set
+- `POST /api/push/subscribe` stores a subscription
+- `DELETE /api/push/subscribe` removes a subscription
+- `POST /api/push/send` sends a test notification
+- `GET|POST /api/cron/reminders` is the future server-side reminder scheduler for closed-app delivery
 
-- `POST /api/sync` applies queued task changes and returns the current task set.
-- `POST /api/push/subscribe` stores a subscription.
-- `DELETE /api/push/subscribe` removes a subscription.
-- `POST /api/push/send` sends a test/user reminder notification.
-- `GET|POST /api/cron/reminders` runs the server-side due reminder scheduler for installed push subscribers when the app is closed.
+## Notes
 
-The server reminder cron expects the Supabase migration in `../supabase/schema.sql` to include the `public.reminder_jobs` table, and it should be scheduled every 5 minutes to process due reminders reliably.
-
-Supabase RLS policies restrict profiles, tasks, settings, tombstones, and push subscriptions to the current authenticated user. Task conflicts use the newest `updated_at`; deletes use tombstones so an offline delete cannot be resurrected by an older write.
+- Supabase RLS restricts profiles, tasks, settings, tombstones, reminder jobs, and push subscriptions to the current user
+- Task conflicts use newest `updated_at`
+- Offline deletes are protected with tombstones
+- This app is designed as a PWA and supports Add to Home Screen in supported browsers
